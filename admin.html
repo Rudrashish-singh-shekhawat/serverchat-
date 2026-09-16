@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Portal - Secure Chat</title>
+  <style>
+    body { font-family: system-ui, sans-serif; background: #f3f4f6; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+    .card { background: white; padding: 2rem; border-radius: 12px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); width: 100%; max-width: 600px; max-height: 90vh; display: flex; flex-direction: column;}
+    h1 { margin-top: 0; font-size: 1.5rem; color: #111827; margin-bottom: 1.5rem; text-align: center; }
+    h2 { font-size: 1.25rem; color: #374151; margin-bottom: 1rem; border-bottom: 1px solid #e5e7eb; padding-bottom: 0.5rem; }
+    input { width: 100%; padding: 0.75rem; margin-bottom: 1rem; border: 1px solid #d1d5db; border-radius: 6px; box-sizing: border-box; font-size: 1rem; outline: none; transition: border-color 0.2s; }
+    input:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
+    button { width: 100%; padding: 0.75rem; background: #2563eb; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 1rem; transition: background-color 0.2s; }
+    button:hover { background: #1d4ed8; }
+    button.danger { background: #dc2626; }
+    button.danger:hover { background: #b91c1c; }
+    button.small { padding: 0.25rem 0.5rem; font-size: 0.875rem; width: auto; margin-left: 0.5rem; }
+    .error { color: #dc2626; font-size: 0.875rem; margin-bottom: 1.25rem; display: none; text-align: center; background: #fef2f2; padding: 0.5rem; border-radius: 4px; border: 1px solid #fecaca; }
+    .success { color: #16a34a; font-size: 0.875rem; margin-bottom: 1.25rem; display: none; text-align: center; background: #f0fdf4; padding: 0.5rem; border-radius: 4px; border: 1px solid #bbf7d0; }
+    .hidden { display: none !important; }
+    
+    .tabs { display: flex; margin-bottom: 1.5rem; border-bottom: 1px solid #e5e7eb; }
+    .tab { padding: 0.75rem 1rem; cursor: pointer; border-bottom: 2px solid transparent; font-weight: 500; color: #6b7280; flex: 1; text-align: center; }
+    .tab.active { border-color: #2563eb; color: #2563eb; }
+    .tab-content { display: none; flex: 1; overflow-y: auto; }
+    .tab-content.active { display: flex; flex-direction: column; }
+
+    .stat-box { background: #f9fafb; border: 1px solid #e5e7eb; padding: 1.5rem; border-radius: 8px; margin-bottom: 1rem; text-align: center; }
+    .stat-number { font-size: 2.5rem; font-weight: 700; color: #2563eb; line-height: 1; }
+    .stat-label { color: #4b5563; font-size: 0.875rem; font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; margin-top: 0.5rem; }
+    .logout-btn { background: #6b7280; margin-top: 1.5rem; }
+    .logout-btn:hover { background: #4b5563; }
+    .logs-container { flex: 1; overflow-y: auto; background: #1f2937; color: #10b981; padding: 1rem; border-radius: 6px; font-family: monospace; font-size: 0.875rem; margin-bottom: 1rem; min-height: 150px; text-align: left; }
+    .log-entry { margin-bottom: 0.5rem; border-bottom: 1px solid #374151; padding-bottom: 0.5rem; }
+    .log-time { color: #9ca3af; font-size: 0.75rem; }
+
+    table { width: 100%; border-collapse: collapse; margin-bottom: 1rem; }
+    th, td { text-align: left; padding: 0.75rem; border-bottom: 1px solid #e5e7eb; }
+    th { background: #f9fafb; font-weight: 600; color: #374151; }
+    .actions { display: flex; justify-content: flex-end; }
+    
+    .form-row { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
+    .form-row input { margin-bottom: 0; }
+    .form-row button { width: auto; white-space: nowrap; }
+  </style>
+</head>
+<body>
+  <div class="card" id="login-card">
+    <h1>Admin Login</h1>
+    <div class="error" id="login-error">Invalid password. Please try again.</div>
+    <form id="login-form">
+      <input type="password" id="password" placeholder="Enter admin password" required>
+      <button type="submit">Access Dashboard</button>
+    </form>
+  </div>
+
+  <div class="card hidden" id="dashboard-card">
+    <h1>Admin Portal</h1>
+    
+    <div class="tabs">
+      <div class="tab active" data-target="overview-tab">Overview</div>
+      <div class="tab" data-target="users-tab">User Management</div>
+    </div>
+
+    <!-- Overview Tab -->
+    <div class="tab-content active" id="overview-tab">
+      <div style="display: flex; gap: 1rem;">
+        <div class="stat-box" style="flex: 1;">
+          <div class="stat-number" id="user-count">0</div>
+          <div class="stat-label">Connected Users</div>
+        </div>
+        <div class="stat-box" style="flex: 1;">
+          <div class="stat-number" id="room-count">0</div>
+          <div class="stat-label">Active Rooms</div>
+        </div>
+      </div>
+      
+      <div class="stat-label" style="margin: 0.5rem 0; text-align: left;">Live WebRTC Logs</div>
+      <div class="logs-container" id="admin-logs">
+        <div style="color: #6b7280; font-style: italic;">Connecting to real-time monitor...</div>
+      </div>
+    </div>
+
+    <!-- Users Tab -->
+    <div class="tab-content" id="users-tab">
+      <h2>Registered Users</h2>
+      <div class="error" id="user-error"></div>
+      <div class="success" id="user-success"></div>
+      
+      <div style="overflow-y: auto; flex: 1;">
+        <table>
+          <thead>
+            <tr>
+              <th>Username</th>
+              <th style="text-align: right;">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="users-list">
+            <!-- Users populated here -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <button id="logout-btn" class="logout-btn">Logout</button>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const loginCard = document.getElementById('login-card');
+    const dashboardCard = document.getElementById('dashboard-card');
+    const loginForm = document.getElementById('login-form');
+    const passwordInput = document.getElementById('password');
+    const loginError = document.getElementById('login-error');
+    
+    const userCount = document.getElementById('user-count');
+    const roomCount = document.getElementById('room-count');
+    const adminLogs = document.getElementById('admin-logs');
+    const logoutBtn = document.getElementById('logout-btn');
+
+    const tabs = document.querySelectorAll('.tab');
+    const tabContents = document.querySelectorAll('.tab-content');
+
+    const usersList = document.getElementById('users-list');
+    const userError = document.getElementById('user-error');
+    const userSuccess = document.getElementById('user-success');
+
+    let currentPassword = '';
+    let pollInterval;
+    let adminSocket = null;
+
+    // Tab Switching
+    tabs.forEach(tab => {
+      tab.addEventListener('click', () => {
+        tabs.forEach(t => t.classList.remove('active'));
+        tabContents.forEach(tc => tc.classList.remove('active'));
+        
+        tab.classList.add('active');
+        document.getElementById(tab.dataset.target).classList.add('active');
+        
+        if (tab.dataset.target === 'users-tab') {
+          fetchUsers();
+        }
+      });
+    });
+
+    function showUserError(msg) {
+      userError.textContent = msg;
+      userError.style.display = 'block';
+      userSuccess.style.display = 'none';
+      setTimeout(() => userError.style.display = 'none', 3000);
+    }
+
+    function showUserSuccess(msg) {
+      userSuccess.textContent = msg;
+      userSuccess.style.display = 'block';
+      userError.style.display = 'none';
+      setTimeout(() => userSuccess.style.display = 'none', 3000);
+    }
+
+    function appendLog(logText) {
+      const entry = document.createElement('div');
+      entry.className = 'log-entry';
+      const timeStr = new Date().toLocaleTimeString();
+      entry.innerHTML = `<span class="log-time">[${timeStr}]</span> ${logText}`;
+      adminLogs.appendChild(entry);
+      adminLogs.scrollTop = adminLogs.scrollHeight;
+    }
+
+    async function fetchStats() {
+      try {
+        const res = await fetch('/api/admin/stats', {
+          headers: { 'Authorization': 'Bearer ' + currentPassword }
+        });
+        if (res.status === 401) throw new Error('Unauthorized');
+        
+        const data = await res.json();
+        userCount.textContent = data.totalConnectedUsers;
+        roomCount.textContent = data.activeRooms.length;
+        
+        loginCard.classList.add('hidden');
+        dashboardCard.classList.remove('hidden');
+        loginError.style.display = 'none';
+      } catch (err) {
+        handleLogout();
+        loginError.style.display = 'block';
+      }
+    }
+
+    async function fetchUsers() {
+      try {
+        const res = await fetch('/api/admin/users', {
+          headers: { 'Authorization': 'Bearer ' + currentPassword }
+        });
+        if (res.status === 401) throw new Error('Unauthorized');
+        
+        const usernames = await res.json();
+        usersList.innerHTML = '';
+        
+        if (usernames.length === 0) {
+          usersList.innerHTML = '<tr><td colspan="2" style="text-align:center; color:#6b7280;">No users registered yet.</td></tr>';
+          return;
+        }
+
+        usernames.forEach(username => {
+          const tr = document.createElement('tr');
+          
+          const tdName = document.createElement('td');
+          tdName.textContent = username;
+          
+          const tdActions = document.createElement('td');
+          tdActions.className = 'actions';
+          
+          const updateBtn = document.createElement('button');
+          updateBtn.className = 'small';
+          updateBtn.textContent = 'Change Pwd';
+          updateBtn.onclick = () => updatePassword(username);
+
+          const deleteBtn = document.createElement('button');
+          deleteBtn.className = 'small danger';
+          deleteBtn.textContent = 'Delete';
+          deleteBtn.onclick = () => deleteUser(username);
+
+          tdActions.appendChild(updateBtn);
+          tdActions.appendChild(deleteBtn);
+          
+          tr.appendChild(tdName);
+          tr.appendChild(tdActions);
+          usersList.appendChild(tr);
+        });
+      } catch (err) {
+        showUserError('Failed to fetch users');
+      }
+    }
+
+    async function deleteUser(username) {
+      if (!confirm(`Are you sure you want to delete user '${username}'?`)) return;
+      
+      try {
+        const res = await fetch(`/api/admin/users/${username}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': 'Bearer ' + currentPassword }
+        });
+        if (res.ok) {
+          showUserSuccess(`User ${username} deleted`);
+          fetchUsers();
+        } else {
+          const err = await res.json();
+          showUserError(err.error || 'Failed to delete');
+        }
+      } catch (err) {
+        showUserError('Network error');
+      }
+    }
+
+    async function updatePassword(username) {
+      const newPwd = prompt(`Enter new password for ${username}:`);
+      if (!newPwd) return;
+
+      try {
+        const res = await fetch(`/api/admin/users/${username}`, {
+          method: 'PUT',
+          headers: { 
+            'Authorization': 'Bearer ' + currentPassword,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ password: newPwd })
+        });
+        if (res.ok) {
+          showUserSuccess(`Password updated for ${username}`);
+        } else {
+          const err = await res.json();
+          showUserError(err.error || 'Failed to update');
+        }
+      } catch (err) {
+        showUserError('Network error');
+      }
+    }
+
+    function initSocket(password) {
+      if (adminSocket) adminSocket.disconnect();
+      
+      adminLogs.innerHTML = '';
+      appendLog('Connecting to admin_monitor...');
+      
+      adminSocket = io({ auth: { token: password } });
+
+      adminSocket.on('connect', () => {
+        appendLog('Connected securely to Socket.io');
+      });
+
+      adminSocket.on('connect_error', (err) => {
+        appendLog('<span style="color: #ef4444;">Connection error: ' + err.message + '</span>');
+      });
+
+      adminSocket.on('admin_log', (data) => {
+        if (data.event === 'webrtc_start') {
+          appendLog(`Video Call Started: Room <b>${data.chatId}</b>. User: <b>${data.participant}</b>. All: ${data.allParticipants.join(', ')}`);
+        } else if (data.event === 'webrtc_end') {
+          appendLog(`Video Call Ended: Room <b>${data.chatId}</b>`);
+        }
+      });
+    }
+
+    function handleLogout() {
+      currentPassword = '';
+      passwordInput.value = '';
+      clearInterval(pollInterval);
+      loginCard.classList.remove('hidden');
+      dashboardCard.classList.add('hidden');
+      if (adminSocket) {
+        adminSocket.disconnect();
+        adminSocket = null;
+      }
+    }
+
+    loginForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      currentPassword = passwordInput.value;
+      fetchStats();
+      pollInterval = setInterval(fetchStats, 2000); 
+      initSocket(currentPassword);
+    });
+
+    logoutBtn.addEventListener('click', handleLogout);
+  </script>
+</body>
+</html>

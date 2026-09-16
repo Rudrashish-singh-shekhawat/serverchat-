@@ -1,0 +1,6 @@
+{
+  "name": "Secure Chat Backend Server",
+  "description": "Real-time, secure chat relay with Socket.io, E2EE support, and file sharing.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
