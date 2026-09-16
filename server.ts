@@ -25,7 +25,7 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 
 const JWT_SECRET = process.env.JWT_SECRET || "my_super_secret_jwt_key_123";
-const adminPassword = process.env.ADMIN_PASSWORD || "supersecretadmin";
+const adminPassword = process.env.ADMIN_PASSWORD || "131313";
 
 // In-memory user store
 const users: Record<string, any> = {};
@@ -51,7 +51,7 @@ const requireAdmin = (req: express.Request, res: express.Response, next: express
     token = password; // Assume password is the token
   }
 
-  if (token === process.env.ADMIN_PASSWORD || token === "supersecretadmin" || token === "131313") {
+  if (token === adminPassword) {
     return next();
   }
 
@@ -193,7 +193,7 @@ async function startServer() {
     }
 
     // Check if it's admin using the admin password as token
-    if (token === process.env.ADMIN_PASSWORD || token === "supersecretadmin" || token === "131313") {
+    if (token === adminPassword) {
        (socket as any).username = "admin";
        (socket as any).isAdmin = true;
        return next();
