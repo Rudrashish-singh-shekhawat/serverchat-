@@ -203,7 +203,10 @@
           return;
         }
 
-        usernames.forEach(username => {
+        usernames.forEach(user => {
+          const username = user.name || user; // handle case where backend returns object
+          const qrCode = user.qr; // Handle if we updated the backend to return full objects
+          
           const tr = document.createElement('tr');
           
           const tdName = document.createElement('td');
@@ -212,6 +215,19 @@
           const tdActions = document.createElement('td');
           tdActions.className = 'actions';
           
+          const qrBtn = document.createElement('button');
+          qrBtn.className = 'small';
+          qrBtn.style.backgroundColor = '#10b981';
+          qrBtn.textContent = 'View QR';
+          qrBtn.onclick = () => {
+             if (qrCode) {
+                 const newWindow = window.open();
+                 newWindow.document.write(`<img src="${qrCode}" style="width: 300px; height: 300px; display: block; margin: 0 auto;"/>`);
+             } else {
+                 alert("No QR code available for this user");
+             }
+          };
+
           const updateBtn = document.createElement('button');
           updateBtn.className = 'small';
           updateBtn.textContent = 'Change Pwd';
@@ -222,6 +238,7 @@
           deleteBtn.textContent = 'Delete';
           deleteBtn.onclick = () => deleteUser(username);
 
+          // tdActions.appendChild(qrBtn); // Wait for API to support returning QR first
           tdActions.appendChild(updateBtn);
           tdActions.appendChild(deleteBtn);
           

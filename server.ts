@@ -23,6 +23,9 @@ const userSchema = new mongoose.Schema({
   name: { type: String, required: true, unique: true },
   password: { type: String, required: true },
   qr: { type: String }
+}, { 
+  collection: 'users', // Explicitly naming the collection (acts like a folder in MongoDB)
+  timestamps: true 
 });
 const User = mongoose.model("User", userSchema);
 
