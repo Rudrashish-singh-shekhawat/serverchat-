@@ -7,6 +7,24 @@ import fs from "fs";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import cors from "cors";
+import mongoose from "mongoose";
+import QRCode from "qrcode";
+
+// Database Connection URI
+// The cluster URL is left as a placeholder for the user to fill in if missing, but uses their provided credentials
+const MONGO_URI = process.env.MONGO_URI || "mongodb+srv://rudrashishsinghshekhawat794_db_user:gZyE6uSvl6PV607A@<YOUR_CLUSTER_URL_HERE>/chatdb?retryWrites=true&w=majority";
+
+mongoose.connect(MONGO_URI)
+  .then(() => console.log("Connected to MongoDB Atlas"))
+  .catch((err) => console.error("MongoDB Atlas connection error:", err));
+
+// MongoDB User Schema
+const userSchema = new mongoose.Schema({
+  name: { type: String, required: true, unique: true },
+  password: { type: String, required: true },
+  qr: { type: String }
+});
+const User = mongoose.model("User", userSchema);
 
 // Initialize upload directory
 const uploadDir = path.join(process.cwd(), "uploads");
@@ -26,9 +44,6 @@ const upload = multer({ storage });
 
 const JWT_SECRET = process.env.JWT_SECRET || "my_super_secret_jwt_key_123";
 const adminPassword = process.env.ADMIN_PASSWORD || "131313";
-
-// In-memory user store
-const users: Record<string, any> = {};
 
 export interface ChatMessage {
   chatId: string;
@@ -80,35 +95,56 @@ async function startServer() {
   // --- REST API Routes ---
 
   app.post("/register", async (req, res) => {
-    const { username, password } = req.body;
-    if (!username || !password) {
-      return res.status(400).json({ message: "Username and password required" });
-    }
-    if (users[username]) {
-      return res.status(400).json({ message: "User already exists" });
+    const name = req.body.name || req.body.username;
+    const password = req.body.password;
+    if (!name || !password) {
+      return res.status(400).json({ message: "Name and password required" });
     }
     
-    const hashedPassword = await bcrypt.hash(password, 10);
-    users[username] = { username, password: hashedPassword };
-    
-    const token = jwt.sign({ username }, JWT_SECRET, { expiresIn: "24h" });
-    res.status(200).json({ token });
+    try {
+      const existingUser = await User.findOne({ name });
+      if (existingUser) {
+        return res.status(400).json({ message: "User already exists" });
+      }
+      
+      const hashedPassword = await bcrypt.hash(password, 10);
+      
+      // Generate a unique QR code containing the user's name
+      const qrData = JSON.stringify({ name, type: "user_identity" });
+      const qrCodeBase64 = await QRCode.toDataURL(qrData);
+
+      const newUser = new User({ name, password: hashedPassword, qr: qrCodeBase64 });
+      await newUser.save();
+      
+      const token = jwt.sign({ username: name }, JWT_SECRET, { expiresIn: "24h" });
+      res.status(200).json({ token, qr: qrCodeBase64 });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Server error" });
+    }
   });
 
   app.post("/login", async (req, res) => {
-    const { username, password } = req.body;
-    const user = users[username];
-    if (!user) {
-      return res.status(400).json({ message: "Invalid credentials" });
-    }
+    const name = req.body.name || req.body.username;
+    const password = req.body.password;
     
-    const isValid = await bcrypt.compare(password, user.password);
-    if (!isValid) {
-      return res.status(400).json({ message: "Invalid credentials" });
+    try {
+      const user = await User.findOne({ name });
+      if (!user) {
+        return res.status(400).json({ message: "Invalid credentials" });
+      }
+      
+      const isValid = await bcrypt.compare(password, user.password);
+      if (!isValid) {
+        return res.status(400).json({ message: "Invalid credentials" });
+      }
+      
+      const token = jwt.sign({ username: name }, JWT_SECRET, { expiresIn: "24h" });
+      res.status(200).json({ token, qr: user.qr });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "Server error" });
     }
-    
-    const token = jwt.sign({ username }, JWT_SECRET, { expiresIn: "24h" });
-    res.status(200).json({ token });
   });
 
   app.post("/upload", upload.single("file"), (req, res) => {
@@ -138,49 +174,77 @@ async function startServer() {
 
   // --- Admin CRUD User Routes ---
 
-  app.get("/api/admin/users", requireAdmin, (req, res) => {
-    // Only return registered user accounts (keys that have a username property in the object)
-    const registeredUsers = Object.keys(users).filter(key => typeof users[key] === 'object' && users[key].username);
-    res.json(registeredUsers);
+  app.get("/api/admin/users", requireAdmin, async (req, res) => {
+    try {
+      const dbUsers = await User.find({}, 'name');
+      const registeredUsers = dbUsers.map(u => u.name);
+      res.json(registeredUsers);
+    } catch (err) {
+      res.status(500).json({ error: "Database error" });
+    }
   });
 
   app.post("/api/admin/users", requireAdmin, async (req, res) => {
-    const { username, password } = req.body;
-    if (!username || !password) {
-      return res.status(400).json({ error: "Username and password required" });
-    }
-    if (users[username]) {
-      return res.status(400).json({ error: "User already exists" });
+    const name = req.body.name || req.body.username;
+    const password = req.body.password;
+    if (!name || !password) {
+      return res.status(400).json({ error: "Name and password required" });
     }
     
-    const hashedPassword = await bcrypt.hash(password, 10);
-    users[username] = { username, password: hashedPassword };
-    res.json({ success: true, username });
+    try {
+      const existingUser = await User.findOne({ name });
+      if (existingUser) {
+        return res.status(400).json({ error: "User already exists" });
+      }
+      
+      const hashedPassword = await bcrypt.hash(password, 10);
+      
+      const qrData = JSON.stringify({ name, type: "user_identity" });
+      const qrCodeBase64 = await QRCode.toDataURL(qrData);
+
+      const newUser = new User({ name, password: hashedPassword, qr: qrCodeBase64 });
+      await newUser.save();
+      res.json({ success: true, username: name });
+    } catch (err) {
+      res.status(500).json({ error: "Database error" });
+    }
   });
 
   app.put("/api/admin/users/:username", requireAdmin, async (req, res) => {
-    const { username } = req.params;
+    const name = req.params.username;
     const { password } = req.body;
-    if (!users[username]) {
-      return res.status(404).json({ error: "User not found" });
-    }
+    
     if (!password) {
       return res.status(400).json({ error: "New password required" });
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
-    users[username].password = hashedPassword;
-    res.json({ success: true });
+    try {
+      const user = await User.findOne({ name });
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      const hashedPassword = await bcrypt.hash(password, 10);
+      user.password = hashedPassword;
+      await user.save();
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ error: "Database error" });
+    }
   });
 
-  app.delete("/api/admin/users/:username", requireAdmin, (req, res) => {
-    const { username } = req.params;
-    if (!users[username]) {
-      return res.status(404).json({ error: "User not found" });
-    }
+  app.delete("/api/admin/users/:username", requireAdmin, async (req, res) => {
+    const name = req.params.username;
     
-    delete users[username];
-    res.json({ success: true });
+    try {
+      const result = await User.deleteOne({ name });
+      if (result.deletedCount === 0) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      res.json({ success: true });
+    } catch (err) {
+      res.status(500).json({ error: "Database error" });
+    }
   });
 
   // --- Socket.IO Real-time Events ---
